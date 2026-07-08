@@ -1,9 +1,13 @@
+// lib/screens/scan_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import 'plant_detail_screen.dart';
+import 'growpedia_detail_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -14,7 +18,13 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen>
     with SingleTickerProviderStateMixin {
   bool _isProcessing = false;
+  final MobileScannerController _scannerController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
   late AnimationController _animationController;
+
+  String? _lastScannedCode;
+  DateTime? _lastScanTime;
 
   @override
   void initState() {
@@ -28,7 +38,88 @@ class _ScanScreenState extends State<ScanScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _scannerController.dispose();
     super.dispose();
+  }
+
+  // LOGIKA BARU: Proses deteksi QR
+  void _onDetect(BarcodeCapture capture) async {
+    if (_isProcessing) return;
+
+    if (capture.barcodes.isEmpty) return;
+
+    final qrCode = capture.barcodes.first.rawValue;
+
+    if (qrCode == null) return;
+
+    // Cooldown 2 detik
+    if (_lastScannedCode == qrCode &&
+        _lastScanTime != null &&
+        DateTime.now().difference(_lastScanTime!) <
+            const Duration(seconds: 2)) {
+      return;
+    }
+
+    _lastScannedCode = qrCode;
+    _lastScanTime = DateTime.now();
+
+    _isProcessing = true;
+
+    setState(() {});
+
+    // stop scanner
+    await _scannerController.stop();
+
+    await _processScannedQR(qrCode);
+  }
+
+  // LOGIKA BARU: Pemisahan arah navigasi berdasarkan API
+  Future<void> _processScannedQR(String qrCode) async {
+    try {
+      // Ambil ID User secara dinamis
+      String? currentUserId = await AuthService.getUserId();
+
+      var response = await ApiService.scanQRCode(qrCode, currentUserId);
+
+      if (response['type'] == 'owner_detail') {
+        await Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PlantDetailScreen(
+              plantData: response['data'],
+              // displayImage: response['display_image'] ?? '', // Jika menggunakan format displayImage dari BE
+            ),
+          ),
+        );
+        return;
+      } else if (response['type'] == 'public_info') {
+        await Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GrowpediaDetailScreen(
+              plantMasterData: response['data'],
+              qrCode: response['qr_code'] ?? qrCode,
+              isClaimed: response['is_claimed'] ?? false,
+            ),
+          ),
+        );
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      _isProcessing = false;
+
+      setState(() {});
+
+      await _scannerController.start();
+
+      CustomSnackBar.show(
+        context,
+        e.toString().replaceAll('Exception: ', ''),
+        isError: true,
+      );
+    }
   }
 
   @override
@@ -47,47 +138,19 @@ class _ScanScreenState extends State<ScanScreen>
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          MobileScanner(
-            onDetect: (capture) async {
-              if (_isProcessing) return;
-              final List<Barcode> barcodes = capture.barcodes;
-              if (barcodes.isNotEmpty) {
-                final String? code = barcodes.first.rawValue;
-                if (code != null && code.startsWith('GWK-')) {
-                  setState(() => _isProcessing = true);
-                  try {
-                    final data = await ApiService.getPlantDetail(code);
-                    if (mounted) {
-                      // HAPUS Pengecekan user_id, LANGSUNG lempar ke PlantDetailScreen
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              PlantDetailScreen(plantData: data),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    setState(() => _isProcessing = false);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Gagal mengambil data tanaman'),
-                        ),
-                      );
-                    }
-                  }
-                }
-              }
-            },
-          ),
+          // SCANNER CAMERA
+          MobileScanner(controller: _scannerController, onDetect: _onDetect),
+
+          // UI LAMA: Animasi Kotak Border Hijau
           Center(
             child: Container(
               width: 280,
               height: 280,
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Colors.greenAccent.withValues(alpha: 0.5),
+                  color: Colors.greenAccent.withOpacity(
+                    0.5,
+                  ), // menggunakan withOpacity
                   width: 3,
                 ),
                 borderRadius: BorderRadius.circular(20),
@@ -108,7 +171,7 @@ class _ScanScreenState extends State<ScanScreen>
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.greenAccent.withValues(alpha: 0.8),
+                            color: Colors.greenAccent.withOpacity(0.8),
                             blurRadius: 15,
                             spreadRadius: 3,
                           ),
@@ -120,9 +183,11 @@ class _ScanScreenState extends State<ScanScreen>
               ),
             ),
           ),
+
+          // LOADING OVERLAY
           if (_isProcessing)
             Container(
-              color: Colors.black.withValues(alpha: 0.7),
+              color: Colors.black.withOpacity(0.7),
               child: const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

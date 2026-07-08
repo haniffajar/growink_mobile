@@ -3,8 +3,12 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  final String _baseUrl =
-      'https://mitrablud.com:8443/growink-backend/api'; // Ganti IP
+  final String _baseUrl = 'http://192.168.1.16:8080/api'; // Ganti IP
+
+  static Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('uid');
+  }
 
   Future<Map<String, dynamic>> login(String loginId, String password) async {
     try {

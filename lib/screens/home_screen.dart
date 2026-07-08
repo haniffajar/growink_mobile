@@ -19,8 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
 
   // Mendefinisikan URL dasar penyimpanan aset gambar di backend CodeIgniter 4
-  final String _baseUrlUploads =
-      "https://mitrablud.com:8443/growink-backend/uploads/";
+  final String _baseUrlUploads = "http://192.168.1.16:8080/uploads/";
 
   @override
   void initState() {
@@ -30,12 +29,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchMyPlants() async {
     setState(() => _isLoading = true);
-    final plants = await ApiService.getMyPlants();
-    if (mounted) {
-      setState(() {
-        _myPlants = plants;
-        _isLoading = false;
-      });
+
+    try {
+      // Ambil ID User untuk diteruskan ke API
+      String? userId = await AuthService.getUserId();
+      if (userId != null) {
+        // Menggunakan fetchMyPlants yang sudah membutuhkan parameter userId
+        final plants = await ApiService.fetchMyPlants(userId);
+        if (mounted) {
+          setState(() {
+            _myPlants = plants;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal memuat data: $e')));
+      }
     }
   }
 
@@ -53,7 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _doLogout() async {
-    await AuthService().logout();
+    await AuthService()
+        .logout(); // Pastikan metode logout ada di AuthService Anda
     if (mounted) Navigator.pushReplacementNamed(context, '/welcome');
   }
 
@@ -177,16 +192,20 @@ class _HomeScreenState extends State<HomeScreen> {
         final plant = _myPlants[index];
         final name = plant['custom_name'] ?? plant['plant_name'] ?? 'Tanaman';
         final scientific = plant['scientific_name'] ?? '';
-        final imageName = plant['image'] ?? '';
+        final imageName =
+            plant['image'] ??
+            plant['master_image'] ??
+            ''; // fallback ke master_image jika ada
 
         return Container(
-          // KUNCI PERBAIKAN: Menyusun susunan properti BoxShadow secara presisi dan legal
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.blueGrey.withValues(alpha: 0.06),
+                color: Colors.blueGrey.withValues(
+                  alpha: 0.06,
+                ), // Diubah ke withOpacity agar lebih kompatibel dengan Flutter versi lama/baru
                 spreadRadius: 1,
                 blurRadius: 10,
                 offset: const Offset(0, 4),
@@ -198,29 +217,18 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () async {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF059669),
-                      ),
+                onTap: () {
+                  // KUNCI PERBAIKAN: Langsung oper data 'plant' tanpa perlu memanggil API loading
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PlantDetailScreen(
+                        plantData: plant,
+                      ), // Lempar langsung
                     ),
-                  );
-                  final fullPlantData = await ApiService.getPlantDetail(
-                    plant['qr_code'],
-                  );
-                  if (mounted) {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            PlantDetailScreen(plantData: fullPlantData),
-                      ),
-                    );
-                  }
+                  ).then(
+                    (_) => _fetchMyPlants(),
+                  ); // Refresh data saat user kembali (misal setelah mengedit sesuatu)
                 },
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

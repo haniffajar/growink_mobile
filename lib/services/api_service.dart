@@ -1,12 +1,12 @@
 // ignore_for_file: use_build_context_synchronously
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiService {
-  static const String baseUrl =
-      'https://mitrablud.com:8443/growink-backend/api';
+  static const String baseUrl = 'http://192.168.1.16:8080/api';
 
   // HELPER UNTUK HEADER agar kodingan tidak duplikat
   static Future<Map<String, String>> _getHeaders() async {
@@ -19,35 +19,113 @@ class ApiService {
     };
   }
 
-  static Future<Map<String, dynamic>> getPlantDetail(String qrCode) async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/scan/$qrCode'));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-      return {};
-    } catch (e) {
-      debugPrint("Error getPlantDetail: $e");
-      return {};
+  static Future<List<dynamic>> fetchGrowpedia({String? category}) async {
+    String url = '$baseUrl/growpedia';
+    if (category != null) url += '?category=$category';
+    final response = await http.get(
+      Uri.parse(url),
+      headers: await _getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      return decoded['data'] ?? [];
     }
+    throw Exception('Gagal memuat data Growpedia');
+  }
+
+  static Future<Map<String, dynamic>> scanQRCode(
+    String qrCode,
+    String? userId,
+  ) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/scan'),
+      headers: await _getHeaders(),
+      body: jsonEncode({
+        'qr_code': qrCode,
+        'user_id': userId ?? '', // Dikirim kosong jika belum login
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+
+    final errorBody = jsonDecode(response.body);
+    throw Exception(errorBody['message'] ?? 'QR Code tidak dikenali');
   }
 
   static Future<bool> claimPlant(
     String qrCode,
-    String customName,
-    String location,
+    String verifCode,
+    String userId,
   ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/claim-plant'),
       headers: await _getHeaders(),
       body: jsonEncode({
         'qr_code': qrCode,
-        'custom_name': customName,
-        'location': location,
-        'planted_at': DateTime.now().toIso8601String().split('T')[0],
+        'verif_code': verifCode,
+        'user_id': userId,
       }),
     );
-    return response.statusCode == 200 || response.statusCode == 201;
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+    return false;
+  }
+
+  static Future<String?> updatePlantProfile(
+    String plantId,
+    String customName,
+    String location,
+    File? imageFile,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      var uri = Uri.parse('$baseUrl/user-plants/update-profile/$plantId');
+
+      var request = http.MultipartRequest('POST', uri);
+
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      // Field text
+      request.fields['custom_name'] = customName;
+      request.fields['location'] = location;
+
+      // Upload gambar jika ada
+      if (imageFile != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('image', imageFile.path),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+
+        return jsonResponse['image_path'];
+      }
+
+      debugPrint(
+        'Update Profile Error: ${response.statusCode} ${response.body}',
+      );
+
+      throw Exception(
+        jsonDecode(response.body)['message'] ??
+            'Gagal memperbarui profil tanaman.',
+      );
+    } catch (e) {
+      debugPrint("updatePlantProfile Error : $e");
+      throw Exception(e.toString());
+    }
   }
 
   static Future<bool> recordActivity(
@@ -95,6 +173,18 @@ class ApiService {
       return data['data'] ?? [];
     }
     return [];
+  }
+
+  static Future<List<dynamic>> fetchMyPlants(String userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/my-plants?user_id=$userId'),
+      headers: await _getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      return decoded['data'] ?? [];
+    }
+    throw Exception('Gagal memuat tanaman Anda');
   }
 
   // ==================== SERVICE INTERAKSI AI UPDATE ====================
