@@ -148,8 +148,8 @@ class _ScanScreenState extends State<ScanScreen>
               height: 280,
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Colors.greenAccent.withOpacity(
-                    0.5,
+                  color: Colors.greenAccent.withValues(
+                    alpha: 0.5,
                   ), // menggunakan withOpacity
                   width: 3,
                 ),
@@ -171,7 +171,7 @@ class _ScanScreenState extends State<ScanScreen>
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.greenAccent.withOpacity(0.8),
+                            color: Colors.greenAccent.withValues(alpha: 0.8),
                             blurRadius: 15,
                             spreadRadius: 3,
                           ),
@@ -187,7 +187,7 @@ class _ScanScreenState extends State<ScanScreen>
           // LOADING OVERLAY
           if (_isProcessing)
             Container(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withValues(alpha: 0.7),
               child: const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

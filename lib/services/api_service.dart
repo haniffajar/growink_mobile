@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
-import '../models/plant_model.dart';
 
 class ApiService {
   static const String baseUrl = 'http://192.168.1.16:8080/api';
@@ -18,20 +17,6 @@ class ApiService {
       'Content-Type': 'application/json',
       'Accept': 'application/json', // Server tahu kita minta JSON
     };
-  }
-
-  static Future<List<dynamic>> fetchGrowpedia({String? category}) async {
-    String url = '$baseUrl/growpedia';
-    if (category != null) url += '?category=$category';
-    final response = await http.get(
-      Uri.parse(url),
-      headers: await getHeaders(),
-    );
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(response.body);
-      return decoded['data'] ?? [];
-    }
-    throw Exception('Gagal memuat data Growpedia');
   }
 
   static Future<Map<String, dynamic>> scanQRCode(
@@ -55,25 +40,55 @@ class ApiService {
     throw Exception(errorBody['message'] ?? 'QR Code tidak dikenali');
   }
 
-  static Future<bool> claimPlant(
+  static Future<Map<String, dynamic>> claimPlant(
     String qrCode,
     String verifCode,
     String userId,
   ) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/claim-plant'),
-      headers: await getHeaders(),
-      body: jsonEncode({
-        'qr_code': qrCode,
-        'verif_code': verifCode,
-        'user_id': userId,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/claim-plant'),
+        headers: await getHeaders(),
+        body: jsonEncode({
+          'qr_code': qrCode,
+          'verif_code': verifCode,
+          'user_id': userId,
+        }),
+      );
 
-    if (response.statusCode == 200) {
-      return true;
+      // Decode response body
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'status': true,
+          'message': responseData['message'] ?? 'Berhasil klaim tanaman.',
+        };
+      }
+      // Tangkap error 403 jika limit tanaman tercapai (is_limit_reached dari backend)
+      else if (response.statusCode == 403 &&
+          responseData['is_limit_reached'] == true) {
+        return {
+          'status': false,
+          'is_limit_reached': true,
+          'message': responseData['message'] ?? 'Limit kebun penuh!',
+        };
+      }
+      // Tangkap error lainnya (QR salah, dll)
+      else {
+        return {
+          'status': false,
+          'is_limit_reached': false,
+          'message': responseData['message'] ?? 'Gagal klaim tanaman.',
+        };
+      }
+    } catch (e) {
+      return {
+        'status': false,
+        'is_limit_reached': false,
+        'message': 'Terjadi kesalahan jaringan.',
+      };
     }
-    return false;
   }
 
   static Future<String?> updatePlantProfile(
@@ -155,18 +170,6 @@ class ApiService {
   static Future<List<dynamic>> getPlantHistory(String plantId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/activities/$plantId'),
-      headers: await getHeaders(),
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['data'] ?? [];
-    }
-    return [];
-  }
-
-  static Future<List<dynamic>> getMyPlants() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/my-plants'),
       headers: await getHeaders(),
     );
     if (response.statusCode == 200) {
@@ -268,6 +271,29 @@ class ApiService {
     } catch (e) {
       debugPrint("Error getAiRecommendations: $e");
       return [];
+    }
+  }
+
+  // ==================== SERVICE UPGRADE PREMIUM ====================
+  static Future<Map<String, dynamic>> upgradePremium(String userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/upgrade-premium'),
+        headers: await getHeaders(),
+        body: jsonEncode({'user_id': userId}),
+      );
+
+      final responseData = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'status': true, 'message': responseData['message']};
+      } else {
+        return {
+          'status': false,
+          'message': responseData['message'] ?? 'Gagal upgrade.',
+        };
+      }
+    } catch (e) {
+      return {'status': false, 'message': 'Terjadi kesalahan jaringan.'};
     }
   }
 }

@@ -20,11 +20,22 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final prefs = await SharedPreferences.getInstance();
+
         await prefs.setString('jwt_token', data['token']);
         await prefs.setString(
           'uid',
           data['user']['id'].toString(),
         ); // Simpan User ID
+
+        // ==========================================
+        // TAMBAHKAN 2 BARIS INI UNTUK STATUS PREMIUM
+        // ==========================================
+        // Membaca integer dari backend (1 = Premium, 0 = Gratis)
+        bool isPremium = data['user']['is_premium'] == 1;
+        // Menyimpan status tersebut ke penyimpanan lokal HP
+        await prefs.setBool('is_premium', isPremium);
+        // ==========================================
+
         return {'success': true, 'data': data};
       }
       return {
@@ -72,9 +83,20 @@ class AuthService {
     }
   }
 
-  Future<void> logout() async {
+  static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
     await prefs.remove('uid');
+    await prefs.remove('is_premium'); // Hapus juga memori premium
+  }
+
+  static Future<void> setPremiumStatus(bool isPremium) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_premium', isPremium);
+  }
+
+  static Future<bool> getPremiumStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('is_premium') ?? false;
   }
 }

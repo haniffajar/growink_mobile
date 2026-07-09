@@ -1,5 +1,5 @@
 // lib/screens/plant_detail_screen.dart
-// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: curly_braces_in_flow_control_structures, use_build_context_synchronously
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -7,8 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/plant_model.dart';
 import '../services/api_service.dart';
-import 'login_screen.dart';
-import 'claim_plant_screen.dart';
 import '../widgets/custom_snackbar.dart';
 
 class PlantDetailScreen extends StatefulWidget {
@@ -32,7 +30,6 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   bool _isLoadingRecommendations = true;
   bool _isLoggedIn = false;
   bool _isOwner = false;
-  bool _isUnclaimed = false;
 
   final _notesCtrl = TextEditingController();
 
@@ -103,29 +100,28 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     final dynamic rawPlantUserId = widget.plantData['user_id'];
     final String? plantOwnerId = rawPlantUserId?.toString();
 
-    if (rawPlantUserId == null) _isUnclaimed = true;
-
-    if (token != null && token.isNotEmpty) {
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = true;
-          if (currentUserId != null &&
-              plantOwnerId != null &&
-              currentUserId == plantOwnerId) {
-            _isOwner = true;
-          }
-        });
+    if (rawPlantUserId == null)
+      if (token != null && token.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoggedIn = true;
+            if (currentUserId != null &&
+                plantOwnerId != null &&
+                currentUserId == plantOwnerId) {
+              _isOwner = true;
+            }
+          });
+        }
+        _loadHistory();
+        _loadAiRecommendations();
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingHistory = false;
+            _isLoadingRecommendations = false;
+          });
+        }
       }
-      _loadHistory();
-      _loadAiRecommendations();
-    } else {
-      if (mounted) {
-        setState(() {
-          _isLoadingHistory = false;
-          _isLoadingRecommendations = false;
-        });
-      }
-    }
   }
 
   Future<void> _loadHistory() async {

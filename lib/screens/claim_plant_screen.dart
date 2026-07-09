@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../widgets/custom_snackbar.dart';
+import '../widgets/premium_paywall.dart';
 
 class ClaimPlantScreen extends StatefulWidget {
   final Map<String, dynamic> plantData;
@@ -16,8 +17,7 @@ class ClaimPlantScreen extends StatefulWidget {
 
 class _ClaimPlantScreenState extends State<ClaimPlantScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _verifCtrl =
-      TextEditingController(); // Controller untuk Kode Verifikasi
+  final _verifCtrl = TextEditingController();
   bool _isLoading = false;
 
   void _submitClaim() async {
@@ -39,22 +39,34 @@ class _ClaimPlantScreenState extends State<ClaimPlantScreen> {
         return;
       }
 
-      // 2. Kirim data claim (QR Code, Verif Code, User ID) ke API
-      bool success = await ApiService.claimPlant(
+      // 2. Kirim data claim ke API (Sekarang mengembalikan Map)
+      final result = await ApiService.claimPlant(
         widget.plantData['qr_code'] ?? '',
         _verifCtrl.text.trim(),
         userId,
       );
 
-      if (success && mounted) {
-        CustomSnackBar.show(
-          context,
-          "Berhasil! Tanaman telah masuk ke Dashboard Anda.",
-          isError: false,
-        );
-
-        // 3. Arahkan kembali ke Home/Dashboard dan hapus riwayat navigasi sebelumnya
-        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      if (mounted) {
+        if (result['status'] == true) {
+          // BERHASIL
+          CustomSnackBar.show(
+            context,
+            result['message'] ??
+                "Berhasil! Tanaman telah masuk ke Dashboard Anda.",
+            isError: false,
+          );
+          // Arahkan kembali ke Home
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        } else {
+          // GAGAL
+          if (result['is_limit_reached'] == true) {
+            // TAMPILKAN PAYWALL JIKA LIMIT TERCAPAI
+            PremiumPaywall.show(context, result['message']);
+          } else {
+            // ERROR BIASA (Misal: Kode salah, QR sudah diklaim)
+            CustomSnackBar.show(context, result['message'], isError: true);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {

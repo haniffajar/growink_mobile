@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import 'scan_screen.dart';
 import 'plant_detail_screen.dart';
 import 'growpedia_home_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -61,16 +62,14 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (context) => const ScanScreen()),
       ).then((_) => _fetchMyPlants());
     } else if (index == 2) {
-      _doLogout();
+      // GANTI: Arahkan ke halaman Profil, bukan langsung Logout
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ProfileScreen()),
+      ).then((_) => _fetchMyPlants()); // Refresh home saat kembali dari profil
     } else {
       setState(() => _selectedIndex = index);
     }
-  }
-
-  void _doLogout() async {
-    await AuthService()
-        .logout(); // Pastikan metode logout ada di AuthService Anda
-    if (mounted) Navigator.pushReplacementNamed(context, '/welcome');
   }
 
   @override
@@ -118,8 +117,8 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Scan',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.logout_rounded),
-            label: 'Logout',
+            icon: Icon(Icons.person_rounded),
+            label: 'Profil',
           ),
         ],
         currentIndex: _selectedIndex,

@@ -1,4 +1,6 @@
 // lib/screens/growpedia_detail_screen.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
@@ -279,7 +281,7 @@ class _GrowpediaDetailScreenState extends State<GrowpediaDetailScreen> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               offset: const Offset(0, -4),
               blurRadius: 10,
             ),
