@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'scan_screen.dart';
 import 'plant_detail_screen.dart';
+import 'growpedia_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -93,13 +94,19 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: primaryEmerald),
-            )
-          : _myPlants.isEmpty
-          ? _buildEmptyState()
-          : _buildPlantGrid(),
+      body: Column(
+        children: [
+          _buildGrowpediaCard(),
+
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _myPlants.isEmpty
+                ? _buildEmptyState()
+                : _buildPlantGrid(),
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -173,6 +180,90 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGrowpediaCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+
+        onTap: () {
+          Navigator.push(
+            context,
+
+            MaterialPageRoute(builder: (_) => const GrowpediaHomeScreen()),
+          );
+        },
+
+        child: Container(
+          padding: const EdgeInsets.all(20),
+
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+
+            gradient: const LinearGradient(
+              colors: [Color(0xff16A34A), Color(0xff22C55E)],
+            ),
+          ),
+
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+
+                  borderRadius: BorderRadius.circular(14),
+                ),
+
+                child: const Icon(
+                  Icons.menu_book,
+
+                  color: Colors.white,
+
+                  size: 34,
+                ),
+              ),
+
+              const SizedBox(width: 20),
+
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                  children: [
+                    Text(
+                      "Growpedia",
+
+                      style: TextStyle(
+                        color: Colors.white,
+
+                        fontSize: 22,
+
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    SizedBox(height: 6),
+
+                    Text(
+                      "Pelajari ratusan tanaman lengkap beserta cara perawatannya.",
+
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Icon(Icons.arrow_forward_ios, color: Colors.white),
+            ],
+          ),
         ),
       ),
     );

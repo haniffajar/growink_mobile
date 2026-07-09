@@ -4,12 +4,13 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import '../models/plant_model.dart';
 
 class ApiService {
   static const String baseUrl = 'http://192.168.1.16:8080/api';
 
   // HELPER UNTUK HEADER agar kodingan tidak duplikat
-  static Future<Map<String, String>> _getHeaders() async {
+  static Future<Map<String, String>> getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
     return {
@@ -24,7 +25,7 @@ class ApiService {
     if (category != null) url += '?category=$category';
     final response = await http.get(
       Uri.parse(url),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
     );
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
@@ -39,7 +40,7 @@ class ApiService {
   ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/scan'),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
       body: jsonEncode({
         'qr_code': qrCode,
         'user_id': userId ?? '', // Dikirim kosong jika belum login
@@ -61,7 +62,7 @@ class ApiService {
   ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/claim-plant'),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
       body: jsonEncode({
         'qr_code': qrCode,
         'verif_code': verifCode,
@@ -135,7 +136,7 @@ class ApiService {
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/activities'),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
       body: jsonEncode({
         'plant_id': plantId,
         'activity_type': activity,
@@ -154,7 +155,7 @@ class ApiService {
   static Future<List<dynamic>> getPlantHistory(String plantId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/activities/$plantId'),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -166,7 +167,7 @@ class ApiService {
   static Future<List<dynamic>> getMyPlants() async {
     final response = await http.get(
       Uri.parse('$baseUrl/my-plants'),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -178,7 +179,7 @@ class ApiService {
   static Future<List<dynamic>> fetchMyPlants(String userId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/my-plants?user_id=$userId'),
-      headers: await _getHeaders(),
+      headers: await getHeaders(),
     );
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
@@ -205,7 +206,7 @@ class ApiService {
 
       final response = await http.post(
         Uri.parse('$baseUrl/ai/interact'),
-        headers: await _getHeaders(),
+        headers: await getHeaders(),
         body: jsonEncode({
           'plant_name': plantName,
           'prompt': prompt,
@@ -239,7 +240,7 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/plants/recommendation'),
-        headers: await _getHeaders(),
+        headers: await getHeaders(),
         body: jsonEncode({
           'plant_id': plantId,
           'type': jenis, // Dikirim langsung sebagai field 'type'
@@ -257,7 +258,7 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/plants/recommendation/$plantId'),
-        headers: await _getHeaders(),
+        headers: await getHeaders(),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -6,7 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'plant_detail_screen.dart';
-import 'growpedia_detail_screen.dart';
+import 'scan_detail_screen.dart';
 import '../widgets/custom_snackbar.dart';
 
 class ScanScreen extends StatefulWidget {
@@ -96,7 +96,7 @@ class _ScanScreenState extends State<ScanScreen>
         await Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => GrowpediaDetailScreen(
+            builder: (context) => ScanDetailScreen(
               plantMasterData: response['data'],
               qrCode: response['qr_code'] ?? qrCode,
               isClaimed: response['is_claimed'] ?? false,
