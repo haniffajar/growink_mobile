@@ -202,20 +202,28 @@ class ApiService {
     String mimeType = 'image/jpeg',
   }) async {
     try {
-      // Pastikan history dikonversi menjadi list biasa yang bersih
-      final cleanHistory = history
-          .map((e) => {'role': e['role'], 'text': e['text']})
-          .toList();
+      // OPTIMASI: Pastikan history benar-benar bersih.
+      // Jangan pernah memasukkan gambar ke dalam history array.
+      // Jika ada history yang mengandung gambar, cukup kirim teksnya saja.
+      final cleanHistory = history.map((e) {
+        String text = e['text'] ?? '';
+        // Jika history mengandung tag gambar, bersihkan agar tidak dianggap sebagai payload gambar
+        text = text.replaceAll(RegExp(r'📷 \[.*?\]'), '').trim();
 
+        return {'role': e['role'], 'text': text};
+      }).toList();
+
+      // Pastikan URL sudah sesuai dengan group route di CodeIgniter Anda
+      // Karena baseUrl sudah mengandung '/api', maka endpointnya adalah '/ai/interact'
       final response = await http.post(
         Uri.parse('$baseUrl/ai/interact'),
         headers: await getHeaders(),
         body: jsonEncode({
           'plant_name': plantName,
           'prompt': prompt,
-          'history': cleanHistory, // Mengirim data history terformat bersih
+          'history': cleanHistory, // Hanya data teks yang bersih
           'image_base64':
-              imageBase64, // Mengirim null asli jika tidak ada gambar
+              imageBase64, // Gambar hanya dikirim di request ini (current request)
           'mime_type': mimeType,
         }),
       );
@@ -225,12 +233,16 @@ class ApiService {
         return data['text'] ?? 'Tidak ada respons dari Pakar AI.';
       }
 
-      // Membantu debugging: cetak isi body jika server mengembalikan error (500/404)
+      // Penanganan error yang lebih informatif untuk debugging
+      if (response.statusCode == 500) {
+        return 'Server AI sedang sibuk atau timeout. Coba lagi nanti.';
+      }
+
       debugPrint("Server Error AI Response: ${response.body}");
-      return 'Error Server (${response.statusCode}): Gagal memproses data AI.';
+      return 'Gagal memproses data AI (${response.statusCode}).';
     } catch (e) {
       debugPrint("Exception caught in interactWithAi: $e");
-      return 'Gagal terhubung ke server AI: $e';
+      return 'Gagal terhubung ke server AI: Pastikan koneksi internet stabil.';
     }
   }
 
@@ -286,12 +298,19 @@ class ApiService {
 
       final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200) {
-        return {
-          'status': true,
-          'data':
-              responseData['data'], // Berisi: plant_id, next_watering, frequency
-        };
+      // Cek Status Code dan pastikan ada kunci 'data'
+      if (response.statusCode == 200 && responseData['status'] == true) {
+        if (responseData['data'] != null) {
+          return {
+            'status': true,
+            'data': responseData['data'], // Data aman
+          };
+        } else {
+          return {
+            'status': false,
+            'message': 'Data jadwal tidak ditemukan di server.',
+          };
+        }
       } else {
         return {
           'status': false,
@@ -299,6 +318,7 @@ class ApiService {
         };
       }
     } catch (e) {
+      debugPrint("Error API: $e");
       return {'status': false, 'message': 'Tidak dapat terhubung ke server.'};
     }
   }

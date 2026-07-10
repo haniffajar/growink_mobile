@@ -2,13 +2,16 @@
 // ignore_for_file: curly_braces_in_flow_control_structures, use_build_context_synchronously
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/plant_model.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../widgets/custom_snackbar.dart';
 import '../services/notification_service.dart';
+import '../widgets/premium_paywall.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Map<String, dynamic> plantData;
@@ -31,6 +34,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   bool _isLoadingRecommendations = true;
   bool _isLoggedIn = false;
   bool _isOwner = false;
+  bool _isPremium = false;
 
   final _notesCtrl = TextEditingController();
 
@@ -48,6 +52,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     _editNameCtrl.text = widget.plantData['custom_name'] ?? '';
     _editLocationCtrl.text = widget.plantData['location'] ?? '';
     _checkLoginAndFetchData();
+    _checkPremiumStatus();
   }
 
   @override
@@ -101,28 +106,36 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     final dynamic rawPlantUserId = widget.plantData['user_id'];
     final String? plantOwnerId = rawPlantUserId?.toString();
 
-    if (rawPlantUserId == null)
-      if (token != null && token.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _isLoggedIn = true;
-            if (currentUserId != null &&
-                plantOwnerId != null &&
-                currentUserId == plantOwnerId) {
-              _isOwner = true;
-            }
-          });
-        }
-        _loadHistory();
-        _loadAiRecommendations();
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoadingHistory = false;
-            _isLoadingRecommendations = false;
-          });
-        }
+    // Baris "if (rawPlantUserId == null)" dihapus dari sini
+
+    if (token != null && token.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = true;
+          if (currentUserId != null &&
+              plantOwnerId != null &&
+              currentUserId == plantOwnerId) {
+            _isOwner = true;
+          }
+        });
       }
+      _loadHistory();
+      _loadAiRecommendations();
+    } else {
+      if (mounted) {
+        setState(() {
+          _isLoadingHistory = false;
+          _isLoadingRecommendations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkPremiumStatus() async {
+    bool premiumStatus = await AuthService.getPremiumStatus();
+    setState(() {
+      _isPremium = premiumStatus;
+    });
   }
 
   Future<void> _loadHistory() async {
@@ -222,38 +235,40 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       _loadHistory();
       if (action.toLowerCase() == 'siram') {
         try {
-          // Asumsi ApiService().getWateringSchedule() sudah dibuat seperti sebelumnya
-          // Ubah ke ApiService.getWateringSchedule() jika Anda menggunakan static method
-          final scheduleData = await ApiService.getWateringSchedule(
+          // Panggil fungsi yang sudah diperbaiki
+          final scheduleResult = await ApiService.getWateringSchedule(
             int.parse(plantId),
           );
 
-          if (mounted) {
-            final plantName =
-                widget.plantData['custom_name'] ??
-                widget.plantData['plant_name'] ??
-                'Tanaman';
+          // CEK STATUS DULU!
+          if (scheduleResult['status'] == true) {
+            final data = scheduleResult['data'];
+
+            final plantName = widget.plantData['custom_name'] ?? 'Tanaman';
 
             await NotificationService.scheduleWatering(
               plantId: int.parse(plantId),
               plantName: plantName,
-              nextWateringStr: scheduleData['next_watering'],
-              frequency: int.parse(scheduleData['frequency'].toString()),
+              // Gunakan toString() aman agar tidak crash jika data bukan String
+              nextWateringStr: data['next_watering'].toString(),
+              frequency: int.tryParse(data['frequency'].toString()) ?? 0,
             );
 
-            // Tambahkan snackbar info tambahan bahwa jadwal diset
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '📅 Pengingat siram otomatis disetel untuk ${scheduleData['frequency']} hari ke depan.',
-                ),
-                backgroundColor: Colors.blue.shade700,
-                duration: const Duration(seconds: 4),
-              ),
+            CustomSnackBar.show(
+              context,
+              'Jadwal siram telah disinkronisasi.',
+              isError: false,
+            );
+          } else {
+            // Tampilkan pesan error dari API jika ada
+            CustomSnackBar.show(
+              context,
+              scheduleResult['message'],
+              isError: true,
             );
           }
         } catch (e) {
-          debugPrint("Gagal mengatur jadwal notifikasi lokal: $e");
+          debugPrint("Gagal mengatur jadwal: $e");
         }
       }
     } else {
@@ -785,6 +800,15 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       padding: const EdgeInsets.all(20),
       children: [
         Text(
+          plant.customName ?? plant.plantName ?? 'Nama Tanaman',
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
           widget.plantData['latin_name'] ?? 'Nama Latin Tidak Diketahui',
           style: const TextStyle(
             fontSize: 16,
@@ -914,128 +938,229 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(20),
+    return Stack(
       children: [
-        const Text(
-          "Edit Profil Tanaman",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
-
-        // Pilih Gambar
-        Center(
-          child: GestureDetector(
-            onTap: _pickImage,
-            child: Container(
-              height: 150,
-              width: 150,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.green.shade300,
-                  width: 2,
-                  style: BorderStyle.solid,
+        // ==========================================
+        // 1. KONTEN EDIT (Di-blur dan dilumpuhkan jika gratis)
+        // ==========================================
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(
+            // Jika Premium (true) blur = 0, Jika Gratis (false) blur = 6.0
+            sigmaX: _isPremium ? 0.0 : 6.0,
+            sigmaY: _isPremium ? 0.0 : 6.0,
+          ),
+          child: IgnorePointer(
+            // Mematikan ketikan/klik form jika BUKAN premium
+            ignoring: !_isPremium,
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Text(
+                  "Edit Profil Tanaman",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              ),
-              child: _tempUpdatedImage != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.file(_tempUpdatedImage!, fit: BoxFit.cover),
-                    )
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.camera_alt_rounded,
-                          size: 40,
-                          color: Colors.green,
+                const SizedBox(height: 20),
+
+                // Pilih Gambar
+                Center(
+                  child: GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      height: 150,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.green.shade300,
+                          width: 2,
+                          style: BorderStyle.solid,
                         ),
-                        SizedBox(height: 8),
-                        Text(
-                          "Pilih Foto",
+                      ),
+                      child: _tempUpdatedImage != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.file(
+                                _tempUpdatedImage!,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.camera_alt_rounded,
+                                  size: 40,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  "Pilih Foto",
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Input Custom Name
+                const Text(
+                  "Nama Panggilan Tanaman",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _editNameCtrl,
+                  decoration: InputDecoration(
+                    hintText: "Cth: Monstera Kesayangan",
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Input Lokasi
+                const Text(
+                  "Lokasi Penempatan",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _editLocationCtrl,
+                  decoration: InputDecoration(
+                    hintText: "Cth: Teras Depan / Ruang Tamu",
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Tombol Simpan
+                ElevatedButton(
+                  onPressed: _isSavingProfile ? null : _saveProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isSavingProfile
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          "Simpan Perubahan",
                           style: TextStyle(
-                            color: Colors.green,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Input Custom Name
-        const Text(
-          "Nama Panggilan Tanaman",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _editNameCtrl,
-          decoration: InputDecoration(
-            hintText: "Cth: Monstera Kesayangan",
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Input Lokasi
-        const Text(
-          "Lokasi Penempatan",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _editLocationCtrl,
-          decoration: InputDecoration(
-            hintText: "Cth: Teras Depan / Ruang Tamu",
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 32),
-
-        // Tombol Simpan
-        ElevatedButton(
-          onPressed: _isSavingProfile ? null : _saveProfile,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF059669),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: _isSavingProfile
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Text(
-                  "Simpan Perubahan",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
                 ),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 80),
+
+        // ==========================================
+        // 2. OVERLAY & TOMBOL UPGRADE (Muncul jika gratis)
+        // ==========================================
+        if (!_isPremium)
+          Positioned.fill(
+            child: Container(
+              // Efek putih transparan di atas form yang di-blur agar terlihat elegan
+              color: Colors.white.withOpacity(0.5),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.workspace_premium_rounded,
+                      size: 80,
+                      color: Colors.amber,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Fitur Khusus Premium',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 40.0),
+                      child: Text(
+                        'Upgrade akun Anda untuk dapat mengubah foto, nama, dan lokasi tanaman.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.black54,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        // Memanggil bottom sheet premium paywall Anda
+                        PremiumPaywall.show(
+                          context,
+                          'Buka akses Edit Profil Tanaman dan nikmati fitur tak terbatas dengan Premium!',
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber,
+                        foregroundColor: Colors.black87,
+                        elevation: 3,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                      child: const Text(
+                        'Upgrade ke Premium',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

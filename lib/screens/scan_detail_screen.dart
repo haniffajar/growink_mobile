@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'claim_plant_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class ScanDetailScreen extends StatefulWidget {
   final Map<String, dynamic> plantMasterData;
@@ -29,10 +30,10 @@ class _ScanDetailScreenState extends State<ScanDetailScreen> {
     String? userId = await AuthService.getUserId();
 
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Silakan login terlebih dahulu untuk klaim tanaman.'),
-        ),
+      CustomSnackBar.show(
+        context,
+        'Silakan login terlebih dahulu untuk klaim tanaman.',
+        isError: true,
       );
 
       await Navigator.pushNamed(context, '/login');

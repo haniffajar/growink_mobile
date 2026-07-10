@@ -6,6 +6,7 @@ import '../models/plant_model.dart';
 import '../services/growpedia_service.dart';
 import '../services/api_service.dart';
 import 'growpedia_detail_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class GrowpediaListScreen extends StatelessWidget {
   final String category;
@@ -134,9 +135,7 @@ class GrowpediaListScreen extends StatelessWidget {
                         ),
                       );
                     } catch (e) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                      CustomSnackBar.show(context, e.toString(), isError: true);
                     }
                   },
                 ),

@@ -10,6 +10,7 @@ import 'plant_detail_screen.dart';
 import 'growpedia_home_screen.dart';
 import 'profile_screen.dart';
 import 'notification_log_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -51,9 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal memuat data: $e')));
+        CustomSnackBar.show(context, 'Gagal memuat data: $e', isError: true);
       }
     }
   }
