@@ -4,8 +4,15 @@ import 'screens/welcome_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  // Wajib untuk menjalankan kode async sebelum runApp()
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inisialisasi Local Notification
+  await NotificationService.init();
+
   runApp(const GrowinkApp());
 }
 

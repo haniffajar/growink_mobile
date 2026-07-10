@@ -1,5 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
-
+import 'package:badges/badges.dart' as badges; // Package badges
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -7,6 +9,7 @@ import 'scan_screen.dart';
 import 'plant_detail_screen.dart';
 import 'growpedia_home_screen.dart';
 import 'profile_screen.dart';
+import 'notification_log_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -87,6 +90,47 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // TOMBOL LONCENG NOTIFIKASI DITAMBAHKAN DI SINI
+          FutureBuilder<SharedPreferences>(
+            future: SharedPreferences.getInstance(),
+            builder: (context, snapshot) {
+              int unreadCount = 0;
+              if (snapshot.hasData) {
+                // Ambil daftar log dari SharedPreferences
+                List<String> logs =
+                    snapshot.data!.getStringList('notif_logs') ?? [];
+                // Hitung berapa yang isRead == false
+                unreadCount = logs
+                    .where((log) => jsonDecode(log)['isRead'] == false)
+                    .length;
+              }
+
+              return IconButton(
+                icon: badges.Badge(
+                  showBadge:
+                      unreadCount > 0, // Hanya tampil jika ada notif baru
+                  badgeContent: Text(
+                    unreadCount.toString(),
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
+                  child: const Icon(Icons.notifications),
+                ),
+                onPressed: () {
+                  // Arahkan ke halaman riwayat/log notifikasi
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationLogScreen(),
+                    ),
+                  ).then((_) {
+                    // Refresh tampilan setelah kembali (supaya badge merah menghilang jika sudah dibaca)
+                    setState(() {});
+                  });
+                },
+              );
+            },
+          ),
+          // Tombol Refresh asli tetap dipertahankan
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _fetchMyPlants,

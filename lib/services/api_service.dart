@@ -274,6 +274,35 @@ class ApiService {
     }
   }
 
+  // ==================== SERVICE Notification ====================
+  static Future<Map<String, dynamic>> getWateringSchedule(
+    int userPlantId,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user-plants/watering-schedule/$userPlantId'),
+        headers: await getHeaders(),
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'status': true,
+          'data':
+              responseData['data'], // Berisi: plant_id, next_watering, frequency
+        };
+      } else {
+        return {
+          'status': false,
+          'message': responseData['message'] ?? 'Gagal mengambil jadwal siram.',
+        };
+      }
+    } catch (e) {
+      return {'status': false, 'message': 'Tidak dapat terhubung ke server.'};
+    }
+  }
+
   // ==================== SERVICE UPGRADE PREMIUM ====================
   static Future<Map<String, dynamic>> upgradePremium(String userId) async {
     try {

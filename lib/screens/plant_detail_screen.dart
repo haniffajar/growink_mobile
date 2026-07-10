@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/plant_model.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_snackbar.dart';
+import '../services/notification_service.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Map<String, dynamic> plantData;
@@ -219,6 +220,42 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       );
       _notesCtrl.clear();
       _loadHistory();
+      if (action.toLowerCase() == 'siram') {
+        try {
+          // Asumsi ApiService().getWateringSchedule() sudah dibuat seperti sebelumnya
+          // Ubah ke ApiService.getWateringSchedule() jika Anda menggunakan static method
+          final scheduleData = await ApiService.getWateringSchedule(
+            int.parse(plantId),
+          );
+
+          if (mounted) {
+            final plantName =
+                widget.plantData['custom_name'] ??
+                widget.plantData['plant_name'] ??
+                'Tanaman';
+
+            await NotificationService.scheduleWatering(
+              plantId: int.parse(plantId),
+              plantName: plantName,
+              nextWateringStr: scheduleData['next_watering'],
+              frequency: int.parse(scheduleData['frequency'].toString()),
+            );
+
+            // Tambahkan snackbar info tambahan bahwa jadwal diset
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '📅 Pengingat siram otomatis disetel untuk ${scheduleData['frequency']} hari ke depan.',
+                ),
+                backgroundColor: Colors.blue.shade700,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint("Gagal mengatur jadwal notifikasi lokal: $e");
+        }
+      }
     } else {
       CustomSnackBar.show(context, "Terjadi kesalahan.", isError: true);
     }
@@ -230,7 +267,382 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     String plantName,
     String plantId,
   ) {
-    // ... [Isi dengan fungsi AI Modal persis dari kode Anda sebelumnya] ...
+    final TextEditingController promptCtrl = TextEditingController();
+    final ScrollController scrollCtrl = ScrollController();
+    File? selectedImage;
+    String? base64Str;
+    bool isAiLoading = false;
+
+    List<Map<String, String>> chatMessages = [
+      {
+        'role': 'model',
+        'text':
+            "Halo! Saya Asisten AI Growink.\nSilakan tanyakan keluhan tentang $plantName, atau unggah foto daun/batangnya agar saya bisa menganalisis penyakitnya.",
+      },
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext aiContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> pickImg(ImageSource source) async {
+              final pickedFile = await ImagePicker().pickImage(
+                source: source,
+                imageQuality: 70,
+              );
+              if (pickedFile != null) {
+                final file = File(pickedFile.path);
+                final bytes = await file.readAsBytes();
+                setDialogState(() {
+                  selectedImage = file;
+                  base64Str = base64Encode(bytes);
+                });
+              }
+            }
+
+            void animateToBottom() {
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (scrollCtrl.hasClients) {
+                  scrollCtrl.animateTo(
+                    scrollCtrl.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              });
+            }
+
+            void checkAndSaveRecommendation(String aiText) async {
+              if (!_isLoggedIn) return;
+
+              if (aiText.contains('[REKOMENDASI]') &&
+                  aiText.contains('[/REKOMENDASI]')) {
+                final start =
+                    aiText.indexOf('[REKOMENDASI]') + '[REKOMENDASI]'.length;
+                final end = aiText.indexOf('[/REKOMENDASI]');
+                final rawData = aiText.substring(start, end).trim();
+
+                try {
+                  final parts = rawData.split('|');
+                  final jenis = parts[0].replaceAll('Jenis:', '').trim();
+                  final detail = parts[1].replaceAll('Detail:', '').trim();
+
+                  bool isSaved = await ApiService.saveRecommendationToDb(
+                    plantId: plantId,
+                    jenis: jenis,
+                    detail: detail,
+                  );
+
+                  if (isSaved) {
+                    _loadAiRecommendations();
+                  }
+                } catch (e) {
+                  debugPrint("Gagal memparsing format rekomendasi: $e");
+                }
+              }
+            }
+
+            Future<void> sendMessage() async {
+              final userText = promptCtrl.text.trim();
+              if (userText.isEmpty && base64Str == null) return;
+
+              setDialogState(() {
+                isAiLoading = true;
+                String displayMessage = userText;
+                if (base64Str != null) {
+                  displayMessage = userText.isEmpty
+                      ? "📷 [Mengirim Foto Tanaman]"
+                      : "📷 [Foto Tanaman] $userText";
+                }
+                chatMessages.add({'role': 'user', 'text': displayMessage});
+              });
+
+              final currentBase64 = base64Str;
+              promptCtrl.clear();
+              setDialogState(() {
+                selectedImage = null;
+                base64Str = null;
+              });
+              animateToBottom();
+
+              try {
+                String responseResult = await ApiService.interactWithAi(
+                  plantName: plantName,
+                  prompt: userText,
+                  history: chatMessages.sublist(0, chatMessages.length - 1),
+                  imageBase64: currentBase64,
+                );
+
+                if (responseResult.startsWith('Error Server') ||
+                    responseResult.startsWith('Gagal terhubung')) {
+                  throw Exception(responseResult);
+                }
+
+                checkAndSaveRecommendation(responseResult);
+
+                final cleanText = responseResult
+                    .replaceAll(
+                      RegExp(
+                        r'\[REKOMENDASI\](.*?)\[/REKOMENDASI\]',
+                        dotAll: true,
+                      ),
+                      '',
+                    )
+                    .trim();
+
+                setDialogState(() {
+                  chatMessages.add({'role': 'model', 'text': cleanText});
+                  isAiLoading = false;
+                });
+              } catch (e) {
+                setDialogState(() {
+                  chatMessages.add({
+                    'role': 'model',
+                    'text':
+                        "Server Pakar AI sedang penuh antrean. Silakan coba kirim pesan beberapa saat lagi, ya! 🌿",
+                  });
+                  isAiLoading = false;
+                });
+              }
+              animateToBottom();
+            }
+
+            return Container(
+              clipBehavior: Clip.antiAlias,
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Scaffold(
+                backgroundColor: Colors.transparent,
+                resizeToAvoidBottomInset: true,
+                body: SafeArea(
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 18,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.green.shade700,
+                              Colors.green.shade500,
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.auto_awesome_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "Dokter Tanaman AI",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Spesialis $plantName",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green.shade100,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(aiContext),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          color: Colors.grey.shade50,
+                          child: ListView.builder(
+                            controller: scrollCtrl,
+                            padding: const EdgeInsets.all(16),
+                            itemCount: chatMessages.length,
+                            itemBuilder: (context, index) {
+                              final msg = chatMessages[index];
+                              final isModel = msg['role'] == 'model';
+                              return Align(
+                                alignment: isModel
+                                    ? Alignment.centerLeft
+                                    : Alignment.centerRight,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                  ),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: isModel
+                                        ? Colors.white
+                                        : Colors.green.shade600,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(16),
+                                      topRight: const Radius.circular(16),
+                                      bottomLeft: Radius.circular(
+                                        isModel ? 0 : 16,
+                                      ),
+                                      bottomRight: Radius.circular(
+                                        isModel ? 16 : 0,
+                                      ),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.02,
+                                        ),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    msg['text'] ?? '',
+                                    style: TextStyle(
+                                      color: isModel
+                                          ? Colors.black87
+                                          : Colors.white,
+                                      fontSize: 14,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      if (selectedImage != null)
+                        Container(
+                          color: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  selectedImage!,
+                                  height: 50,
+                                  width: 50,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                "Foto siap dianalisis...",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.cancel,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () => setDialogState(() {
+                                  selectedImage = null;
+                                  base64Str = null;
+                                }),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (isAiLoading)
+                        LinearProgressIndicator(
+                          color: Colors.green,
+                          backgroundColor: Colors.green.shade100,
+                        ),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        color: Colors.white,
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.camera_alt_rounded,
+                                color: Colors.blue,
+                              ),
+                              onPressed: () => pickImg(ImageSource.camera),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.photo_library_rounded,
+                                color: Colors.orange,
+                              ),
+                              onPressed: () => pickImg(ImageSource.gallery),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: TextField(
+                                controller: promptCtrl,
+                                maxLines: 2,
+                                minLines: 1,
+                                style: const TextStyle(fontSize: 14),
+                                decoration: InputDecoration(
+                                  hintText:
+                                      "Ketik keluhan atau analisis foto...",
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.send_rounded,
+                                color: Colors.green,
+                              ),
+                              onPressed: isAiLoading
+                                  ? null
+                                  : () => sendMessage(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
