@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../widgets/custom_snackbar.dart';
 import '../widgets/premium_paywall.dart';
+import '../widgets/premium_bonus_dialog.dart';
 
 class ClaimPlantScreen extends StatefulWidget {
   final Map<String, dynamic> plantData;
@@ -48,15 +49,39 @@ class _ClaimPlantScreenState extends State<ClaimPlantScreen> {
 
       if (mounted) {
         if (result['status'] == true) {
-          // BERHASIL
-          CustomSnackBar.show(
-            context,
-            result['message'] ??
-                "Berhasil! Tanaman telah masuk ke Dashboard Anda.",
-            isError: false,
-          );
-          // Arahkan kembali ke Home
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+          // Cek apakah user mendapatkan bonus premium
+          bool isBonus = result['is_premium_bonus'] == true;
+
+          if (isBonus) {
+            // Panggil dialog perayaan
+            await AuthService.setPremiumStatus(true);
+            PremiumBonusDialog.show(
+              context,
+              result['message'] ??
+                  "Anda mendapatkan akses Premium selama 1 bulan!",
+              () {
+                // Callback saat tombol ditekan
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/home',
+                  (route) => false,
+                );
+              },
+            );
+          } else {
+            // Tampilkan SnackBar Biasa
+            CustomSnackBar.show(
+              context,
+              result['message'] ??
+                  "Berhasil! Tanaman telah masuk ke Dashboard Anda.",
+              isError: false,
+            );
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+          }
         } else {
           // GAGAL
           if (result['is_limit_reached'] == true) {

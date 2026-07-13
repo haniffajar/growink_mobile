@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.16:8080/api';
+  static const String baseUrl = 'http://192.168.1.16:8080/api/v1';
 
   // HELPER UNTUK HEADER agar kodingan tidak duplikat
   static Future<Map<String, String>> getHeaders() async {
@@ -63,6 +63,7 @@ class ApiService {
         return {
           'status': true,
           'message': responseData['message'] ?? 'Berhasil klaim tanaman.',
+          'is_premium_bonus': responseData['is_premium_bonus'] ?? false,
         };
       }
       // Tangkap error 403 jika limit tanaman tercapai (is_limit_reached dari backend)
@@ -181,7 +182,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchMyPlants(String userId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/my-plants?user_id=$userId'),
+      Uri.parse('$baseUrl/user-plants?user_id=$userId'),
       headers: await getHeaders(),
     );
     if (response.statusCode == 200) {
@@ -235,7 +236,7 @@ class ApiService {
 
       // Penanganan error yang lebih informatif untuk debugging
       if (response.statusCode == 500) {
-        return 'Server AI sedang sibuk atau timeout. Coba lagi nanti.';
+        return 'Server Pakar AI sedang penuh antrean. Silakan coba kirim pesan beberapa saat lagi, ya! 🌿.';
       }
 
       debugPrint("Server Error AI Response: ${response.body}");
