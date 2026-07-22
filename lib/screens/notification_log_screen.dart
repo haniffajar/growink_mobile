@@ -11,6 +11,7 @@ class NotificationLogScreen extends StatefulWidget {
 
 class _NotificationLogScreenState extends State<NotificationLogScreen> {
   List<dynamic> _logs = [];
+  String? _currentUserId;
 
   @override
   void initState() {
@@ -18,29 +19,55 @@ class _NotificationLogScreenState extends State<NotificationLogScreen> {
     _loadLogs();
   }
 
+  // Helper untuk mengambil key SharedPreferences khusus user yang login
+  Future<String?> _getStorageKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dynamic rawUid = prefs.get('uid');
+    if (rawUid != null) {
+      return 'notif_logs_${rawUid.toString()}';
+    }
+    return null;
+  }
+
   Future<void> _loadLogs() async {
     final prefs = await SharedPreferences.getInstance();
-    List<String> savedLogs = prefs.getStringList('notif_logs') ?? [];
+    final dynamic rawUid = prefs.get('uid');
+    _currentUserId = rawUid?.toString();
+
+    if (_currentUserId == null || _currentUserId!.isEmpty) {
+      setState(() => _logs = []);
+      return;
+    }
+
+    // Ambil log berdasarkan key spesifik user ID
+    List<String> savedLogs =
+        prefs.getStringList('notif_logs_$_currentUserId') ?? [];
     setState(() {
       _logs = savedLogs.map((log) => jsonDecode(log)).toList();
     });
   }
 
   Future<void> _markAsRead(int index) async {
+    if (_currentUserId == null) return;
+
     final prefs = await SharedPreferences.getInstance();
-    List<String> savedLogs = prefs.getStringList('notif_logs') ?? [];
+    String key = 'notif_logs_$_currentUserId';
+    List<String> savedLogs = prefs.getStringList(key) ?? [];
 
     Map<String, dynamic> logData = jsonDecode(savedLogs[index]);
     logData['isRead'] = true; // Tandai sudah dibaca
     savedLogs[index] = jsonEncode(logData);
 
-    await prefs.setStringList('notif_logs', savedLogs);
+    await prefs.setStringList(key, savedLogs);
     _loadLogs();
   }
 
   Future<void> _markAllAsRead() async {
+    if (_currentUserId == null) return;
+
     final prefs = await SharedPreferences.getInstance();
-    List<String> savedLogs = prefs.getStringList('notif_logs') ?? [];
+    String key = 'notif_logs_$_currentUserId';
+    List<String> savedLogs = prefs.getStringList(key) ?? [];
 
     List<String> updatedLogs = savedLogs.map((logStr) {
       Map<String, dynamic> logData = jsonDecode(logStr);
@@ -48,7 +75,7 @@ class _NotificationLogScreenState extends State<NotificationLogScreen> {
       return jsonEncode(logData);
     }).toList();
 
-    await prefs.setStringList('notif_logs', updatedLogs);
+    await prefs.setStringList(key, updatedLogs);
     _loadLogs();
   }
 
@@ -82,13 +109,13 @@ class _NotificationLogScreenState extends State<NotificationLogScreen> {
                     color: Colors.green,
                   ),
                   title: Text(
-                    log['title'],
+                    log['title'] ?? 'Notifikasi',
                     style: TextStyle(
                       fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
                     ),
                   ),
-                  subtitle: Text(log['body']),
-                  onTap: () => _markAsRead(index), // Klik untuk read
+                  subtitle: Text(log['body'] ?? ''),
+                  onTap: () => _markAsRead(index),
                 );
               },
             ),

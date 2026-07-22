@@ -1,5 +1,5 @@
 // lib/screens/plant_detail_screen.dart
-// ignore_for_file: curly_braces_in_flow_control_structures, use_build_context_synchronously
+// ignore_for_file: dead_null_aware_expression, dead_code, curly_braces_in_flow_control_structures, use_build_context_synchronously
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
@@ -44,7 +44,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   File? _tempUpdatedImage;
   bool _isSavingProfile = false;
 
-  final String _serverUrl = 'http://192.168.1.16:8080/uploads/';
+  final String _serverUrl = 'https://growink.app/backend/uploads/';
 
   @override
   void initState() {
@@ -674,24 +674,21 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     final masterImage = plantData['master_image']?.toString();
 
     if (widget.displayImage != null && widget.displayImage!.isNotEmpty) {
-      // Prioritas 1: Gambar hasil upload/crop sementara di aplikasi
       imageUrlToUse = '$_serverUrl${widget.displayImage}';
     } else if (userImage != null &&
         userImage.isNotEmpty &&
         userImage.toLowerCase() != 'null') {
-      // Prioritas 2: Gambar kustom dari user (dari kolom user_image)
       imageUrlToUse = '$_serverUrl$userImage';
     } else if (masterImage != null &&
         masterImage.isNotEmpty &&
         masterImage.toLowerCase() != 'null') {
-      // Prioritas 3: Fallback ke master plant jika di user_plants kosong
       imageUrlToUse = '$_serverUrl$masterImage';
     }
 
     List<String> commonPests = _parsePests(widget.plantData['common_pests']);
 
     return DefaultTabController(
-      length: 4, // 4 TAB
+      length: 2, // Diubah dari 4 menjadi 2 (Hanya Informasi dan Aktivitas)
       child: Scaffold(
         backgroundColor: Colors.white,
         body: NestedScrollView(
@@ -752,8 +749,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
                       tabs: [
                         Tab(text: "Informasi"),
                         Tab(text: "Aktivitas"),
-                        Tab(text: "Rekomendasi"),
-                        Tab(text: "Edit Profil"),
+                        // Tab(text: "Rekomendasi"),
+                        // Tab(text: "Edit Profil"),
                       ],
                     ),
                   ),
@@ -770,7 +767,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
             ],
           ),
         ),
-        floatingActionButton: _isLoggedIn
+        floatingActionButton: (_isLoggedIn && _isPremium)
             ? FloatingActionButton.extended(
                 onPressed: () => _showAiAssistantBottomSheet(
                   context,
@@ -1095,7 +1092,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           Positioned.fill(
             child: Container(
               // Efek putih transparan di atas form yang di-blur agar terlihat elegan
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

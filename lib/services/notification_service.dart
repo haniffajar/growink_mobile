@@ -58,7 +58,7 @@ class NotificationService {
           UILocalNotificationDateInterpretation.absoluteTime,
     );
 
-    // 3. Simpan ke Log SharedPreferences
+    // 3. Simpan ke Log SharedPreferences Berdasarkan User ID Aktif
     await _saveToLog(plantId, plantName, nextWateringDate, frequency);
   }
 
@@ -69,7 +69,17 @@ class NotificationService {
     int frequency,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    List<String> logs = prefs.getStringList('notif_logs') ?? [];
+
+    // Ambil UID user yang sedang login
+    final dynamic rawUid = prefs.get('uid');
+    final String? currentUserId = rawUid?.toString();
+
+    // Jika tidak ada user yang login, batalkan penyimpanan log
+    if (currentUserId == null || currentUserId.isEmpty) return;
+
+    // Buat key dinamis khusus user ini
+    final String storageKey = 'notif_logs_$currentUserId';
+    List<String> logs = prefs.getStringList(storageKey) ?? [];
 
     final newLog = {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
@@ -81,6 +91,6 @@ class NotificationService {
     };
 
     logs.insert(0, jsonEncode(newLog)); // Tambahkan di atas (terbaru)
-    await prefs.setStringList('notif_logs', logs);
+    await prefs.setStringList(storageKey, logs);
   }
 }

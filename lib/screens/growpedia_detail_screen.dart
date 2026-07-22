@@ -24,7 +24,7 @@ class GrowpediaDetailScreen extends StatefulWidget {
 }
 
 class _GrowpediaDetailScreenState extends State<GrowpediaDetailScreen> {
-  final String _baseUrlUploads = "http://192.168.1.16:8080/uploads/";
+  final String _baseUrlUploads = "https://growink.app/backend/uploads/";
 
   void _onClaimButtonPressed() async {
     String? userId = await AuthService.getUserId();

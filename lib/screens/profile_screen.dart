@@ -13,7 +13,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String _name = 'User';
   String _email = 'user@email.com';
-  bool _isPremium = false;
+  // bool _isPremium = false;
 
   @override
   void initState() {
@@ -28,10 +28,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _email = prefs.getString('email') ?? '';
     });
 
-    bool premiumStatus = await AuthService.getPremiumStatus();
+    /*    bool premiumStatus = await AuthService.getPremiumStatus();
     setState(() {
       _isPremium = premiumStatus;
-    });
+    }); */
   }
 
   void _logout() async {
@@ -76,7 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
 
             // Kartu Status Premium / Free
-            Container(
+            /* Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -141,8 +141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ],
               ),
-            ),
-
+            ), */
             const SizedBox(height: 40),
 
             // Tombol Logout

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+// import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_screen.dart';
+import '../services/auth_service.dart';
 // Note: Jika kamu menggunakan modul/halaman Home, pastikan untuk mengimportnya di sini
 // import 'home_screen.dart';
 
@@ -22,8 +23,7 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 3));
 
     // 2. Mengambil data token dari SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
+    final token = await AuthService.getAccessToken();
 
     // 3. Jika context sudah tidak valid (user keburu menutup app), batalkan navigasi biar tidak crash
     if (!mounted) return;

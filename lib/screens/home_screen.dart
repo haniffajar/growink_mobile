@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
 
   // Mendefinisikan URL dasar penyimpanan aset gambar di backend CodeIgniter 4
-  final String _baseUrlUploads = "http://192.168.1.16:8080/uploads/";
+  final String _baseUrlUploads = "https://growink.app/backend/uploads/";
 
   @override
   void initState() {
